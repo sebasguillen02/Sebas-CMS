@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ArrowRight, AtSign, BarChart3, Bell, BriefcaseBusiness, CalendarDays, Check,
-  ChevronDown, FileText, LayoutDashboard, Lightbulb, Menu, MoreHorizontal, Plus,
-  Search, Settings, Sparkles, WandSparkles, X,
+  ArrowRight, AtSign, BarChart3, Bell, BriefcaseBusiness, CalendarDays,
+  Check, ChevronDown, FileText, LayoutDashboard, Lightbulb, Menu, MoreHorizontal,
+  Plus, Search, Settings, Sparkles, WandSparkles, X,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -13,16 +13,38 @@ import {
   DialogTitle, DialogTrigger,
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
+  DropdownMenuSeparator, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 type Platform = 'LinkedIn' | 'X';
 type Status = 'Idea' | 'Borrador' | 'Revisión' | 'Programado' | 'Publicado';
 type ContentItem = { id: number; title: string; excerpt: string; platform: Platform; status: Status; date: string };
+type EditorialProfile = {
+  id: 'hype' | 'sebastian'; name: string; kind: string; initials: string; audience: string;
+  goals: string; voiceSummary: string; referenceAccounts: string; linkedinFrequency: number;
+  xFrequency: number; requireApproval: boolean;
+};
 
-const initialContent: ContentItem[] = [
-  { id: 1, title: 'Por qué la mayoría de estrategias de IA fallan antes de empezar', excerpt: 'No es un problema de tecnología. Es un problema de claridad...', platform: 'LinkedIn', status: 'Revisión', date: 'Hoy, 10:30' },
-  { id: 2, title: 'La ventaja no está en usar más herramientas', excerpt: 'Está en diseñar un sistema que convierta ideas en decisiones.', platform: 'X', status: 'Borrador', date: 'Ayer, 18:12' },
-  { id: 3, title: 'Cinco aprendizajes construyendo productos con agentes', excerpt: 'Después de decenas de iteraciones, esto es lo que cambió...', platform: 'LinkedIn', status: 'Programado', date: 'Mar, 09:00' },
+const profileDefaults: EditorialProfile[] = [
+  { id: 'hype', name: 'Hype', kind: 'Empresa', initials: 'HY', audience: 'Fundadores, inversores y personas interesadas en startups y tecnología.', goals: 'Construir autoridad, generar comunidad y aumentar el alcance.', voiceSummary: 'Directa, ambiciosa y clara. Frases breves, ideas contundentes y foco en construir compañías reales junto a creadores. Sin lenguaje corporativo vacío.', referenceAccounts: 'https://x.com/hypeco0\nhttps://www.linkedin.com/company/hype-c0/posts/', linkedinFrequency: 3, xFrequency: 5, requireApproval: true },
+  { id: 'sebastian', name: 'Sebastián', kind: 'Marca personal', initials: 'SM', audience: 'Fundadores, inversores y personas del ecosistema startup y tecnología.', goals: 'Construir autoridad personal, generar comunidad y aumentar el alcance.', voiceSummary: 'Perfil listo para definir con ejemplos personales. Debe sentirse humano, específico y basado en experiencia propia.', referenceAccounts: '', linkedinFrequency: 0, xFrequency: 0, requireApproval: true },
 ];
+
+const sampleContent: Record<EditorialProfile['id'], ContentItem[]> = {
+  hype: [
+    { id: -1, title: 'Los creadores tienen la atención, pero no la infraestructura', excerpt: 'Ahí entra Hype: company builder de consumo masivo junto a influencers.', platform: 'X', status: 'Publicado', date: 'Referencia' },
+    { id: -2, title: 'Los creadores ya tienen la atención, la comunidad y la confianza', excerpt: 'Construimos compañías reales, con producto, fabricación, distribución y retail.', platform: 'LinkedIn', status: 'Publicado', date: 'Referencia' },
+    { id: -3, title: 'Qué significa construir junto a un creador', excerpt: 'Una idea para desarrollar desde la experiencia de Hype.', platform: 'LinkedIn', status: 'Idea', date: 'Pendiente' },
+  ],
+  sebastian: [
+    { id: -4, title: 'Por qué decidí construir desde Buenos Aires', excerpt: 'Una historia personal sobre ambición, ecosistema y ejecución.', platform: 'LinkedIn', status: 'Idea', date: 'Pendiente' },
+    { id: -5, title: 'Lo que aprendí construyendo Hype', excerpt: 'Notas personales para convertir en una serie de publicaciones.', platform: 'X', status: 'Idea', date: 'Pendiente' },
+  ],
+};
 
 const nav = [
   { label: 'Inicio', icon: LayoutDashboard }, { label: 'Ideas', icon: Lightbulb },
@@ -35,19 +57,25 @@ const statusClass: Record<Status, string> = {
 };
 
 export default function Home() {
-  const [content, setContent] = useState(initialContent);
+  const [profiles, setProfiles] = useState(profileDefaults);
+  const [activeProfileId, setActiveProfileId] = useState<EditorialProfile['id']>('hype');
+  const [content, setContent] = useState(sampleContent.hype);
   const [active, setActive] = useState('Inicio');
   const [query, setQuery] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [idea, setIdea] = useState('');
   const [platform, setPlatform] = useState<Platform>('LinkedIn');
   const [saving, setSaving] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsDraft, setSettingsDraft] = useState(profileDefaults[0]);
+  const [settingsSaving, setSettingsSaving] = useState(false);
+  const activeProfile = profiles.find((profile) => profile.id === activeProfileId) ?? profileDefaults[0];
   const visibleContent = useMemo(() => content.filter((item) => `${item.title} ${item.excerpt}`.toLowerCase().includes(query.toLowerCase())), [content, query]);
 
-  const saveIdea = useCallback(async (title: string, targetPlatform: Platform) => {
+  const saveIdea = useCallback(async (title: string, targetPlatform: Platform, profileId: EditorialProfile['id']) => {
     const optimisticItem: ContentItem = { id: Date.now(), title, excerpt: 'Nueva idea lista para desarrollar con tu voz y experiencia.', platform: targetPlatform, status: 'Idea', date: 'Ahora' };
     try {
-      const response = await fetch('/api/content', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title, platform: targetPlatform }) });
+      const response = await fetch('/api/content', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title, platform: targetPlatform, profileId }) });
       if (!response.ok) throw new Error('No se pudo guardar');
       const { item } = await response.json();
       setContent((items) => [{ ...item, date: 'Ahora' }, ...items]);
@@ -59,16 +87,24 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    fetch('/api/content')
+    fetch('/api/profiles')
       .then((response) => response.ok ? response.json() : Promise.reject())
-      .then(({ items }: { items: Array<Omit<ContentItem, 'date'> & { createdAt: string }> }) => {
-        if (items.length) setContent([...items.map((item) => ({ ...item, date: 'Guardado' })), ...initialContent]);
-      })
+      .then(({ profiles: stored }: { profiles: EditorialProfile[] }) => stored.length && setProfiles(stored))
       .catch(() => undefined);
   }, []);
 
   useEffect(() => {
-    type ToolInput = { title?: unknown; platform?: unknown };
+    setContent(sampleContent[activeProfileId]);
+    fetch(`/api/content?profile=${activeProfileId}`)
+      .then((response) => response.ok ? response.json() : Promise.reject())
+      .then(({ items }: { items: Array<Omit<ContentItem, 'date'> & { createdAt: string }> }) => {
+        if (items.length) setContent([...items.map((item) => ({ ...item, date: 'Guardado' })), ...sampleContent[activeProfileId]]);
+      })
+      .catch(() => undefined);
+  }, [activeProfileId]);
+
+  useEffect(() => {
+    type ToolInput = { title?: unknown; platform?: unknown; profile?: unknown };
     type ModelContext = { registerTool: (tool: Record<string, unknown>, options?: { signal?: AbortSignal }) => void | Promise<void> };
     const context = (document as Document & { modelContext?: ModelContext }).modelContext;
     if (!context?.registerTool) return;
@@ -79,16 +115,17 @@ export default function Home() {
       description: 'Guarda una idea nueva en Hype CMS para LinkedIn o X y la muestra en contenido reciente.',
       inputSchema: {
         type: 'object',
-        properties: { title: { type: 'string', minLength: 1, maxLength: 280 }, platform: { type: 'string', enum: ['LinkedIn', 'X'] } },
-        required: ['title', 'platform'], additionalProperties: false,
+        properties: { title: { type: 'string', minLength: 1, maxLength: 280 }, platform: { type: 'string', enum: ['LinkedIn', 'X'] }, profile: { type: 'string', enum: ['hype', 'sebastian'] } },
+        required: ['title', 'platform', 'profile'], additionalProperties: false,
       },
       annotations: { readOnlyHint: false, untrustedContentHint: false },
       async execute(input: ToolInput) {
         const title = typeof input.title === 'string' ? input.title.trim() : '';
         const targetPlatform = input.platform === 'X' ? 'X' : input.platform === 'LinkedIn' ? 'LinkedIn' : null;
-        if (!title || !targetPlatform) throw new Error('Título o plataforma inválidos.');
-        const id = await saveIdea(title, targetPlatform);
-        return { id, status: 'Idea', platform: targetPlatform };
+        const targetProfile = input.profile === 'hype' || input.profile === 'sebastian' ? input.profile : null;
+        if (!title || !targetPlatform || !targetProfile) throw new Error('Título, plataforma o perfil inválidos.');
+        const id = await saveIdea(title, targetPlatform, targetProfile);
+        return { id, status: 'Idea', platform: targetPlatform, profile: targetProfile };
       },
     }, { signal: lifecycle.signal })).catch(() => undefined);
     return () => lifecycle.abort();
@@ -99,9 +136,27 @@ export default function Home() {
     if (!title) return;
     setSaving(true);
     try {
-      await saveIdea(title, platform);
+      await saveIdea(title, platform, activeProfileId);
     } finally {
       setIdea(''); setSaving(false); setDialogOpen(false);
+    }
+  }
+
+  function openProfileSettings() {
+    setSettingsDraft(activeProfile);
+    setSettingsOpen(true);
+  }
+
+  async function saveProfileSettings() {
+    setSettingsSaving(true);
+    try {
+      const response = await fetch('/api/profiles', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(settingsDraft) });
+      if (!response.ok) throw new Error('No se pudo guardar');
+      const { profile } = await response.json();
+      setProfiles((items) => items.map((item) => item.id === profile.id ? profile : item));
+      setSettingsOpen(false);
+    } finally {
+      setSettingsSaving(false);
     }
   }
 
@@ -126,7 +181,26 @@ export default function Home() {
   return (
     <main className="app-shell">
       <aside className="sidebar">
-        <div className="brand-mark"><span className="brand-icon"><Sparkles size={17} strokeWidth={2.4} /></span><span>Hype</span></div>
+        <div className="brand-mark"><span className="brand-icon"><Sparkles size={17} strokeWidth={2.4} /></span><span>CMS</span></div>
+        <DropdownMenu>
+          <DropdownMenuTrigger render={<button className="profile-switcher" />}>
+            <span className={`profile-logo ${activeProfile.id}`} aria-hidden="true">{activeProfile.initials}</span>
+            <span><small>PERFIL ACTIVO</small><strong>{activeProfile.name}</strong></span>
+            <ChevronDown size={15} />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent className="profile-menu" sideOffset={7}>
+            <DropdownMenuLabel>Perfiles editoriales</DropdownMenuLabel>
+            {profiles.map((profile) => (
+              <DropdownMenuItem key={profile.id} className="profile-menu-item" onClick={() => setActiveProfileId(profile.id)}>
+                <span className={`profile-logo ${profile.id}`}>{profile.initials}</span>
+                <span><strong>{profile.name}</strong><small>{profile.kind}</small></span>
+                {profile.id === activeProfileId && <Check className="profile-check" />}
+              </DropdownMenuItem>
+            ))}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={openProfileSettings}><Settings /> Configurar perfil activo</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
         <nav className="main-nav" aria-label="Navegación principal">
           <p className="nav-caption">ESPACIO DE TRABAJO</p>
           {nav.map(({ label, icon: Icon }) => (
@@ -136,8 +210,8 @@ export default function Home() {
           ))}
         </nav>
         <div className="sidebar-bottom">
-          <button className="nav-item"><Settings size={18} /><span>Configuración</span></button>
-          <div className="profile-card"><span className="avatar">SM</span><span className="profile-copy"><strong>Sebastián</strong><small>Marca personal</small></span><MoreHorizontal size={17} /></div>
+          <button className="nav-item" onClick={openProfileSettings}><Settings size={18} /><span>Voz y referencias</span></button>
+          <div className="profile-card"><span className="avatar">SM</span><span className="profile-copy"><strong>Sebastián</strong><small>Administrador</small></span><MoreHorizontal size={17} /></div>
         </div>
       </aside>
 
@@ -156,15 +230,15 @@ export default function Home() {
 
         <div className="content-area">
           <div className="page-heading">
-            <div><p className="eyebrow">LUNES, 7 DE SEPTIEMBRE</p><h1>Buenos días, Sebastián</h1><p>Tu sistema editorial está listo. Hay 2 piezas que necesitan tu atención.</p></div>
+            <div><p className="eyebrow">PERFIL · {activeProfile.kind.toUpperCase()}</p><h1>{activeProfile.name}</h1><p>{activeProfile.goals}</p></div>
             <button className="period-button">Últimos 7 días <ChevronDown size={15} /></button>
           </div>
 
           <div className="metric-grid">
-            <article className="metric-card"><div className="metric-top"><span className="metric-icon purple"><Lightbulb size={18} /></span><span className="trend positive">+4 esta semana</span></div><strong>12</strong><p>Ideas por desarrollar</p></article>
-            <article className="metric-card"><div className="metric-top"><span className="metric-icon blue"><FileText size={18} /></span><span className="trend">3 en revisión</span></div><strong>8</strong><p>Contenidos activos</p></article>
-            <article className="metric-card"><div className="metric-top"><span className="metric-icon amber"><CalendarDays size={18} /></span><span className="trend positive">Semana cubierta</span></div><strong>5</strong><p>Programados</p></article>
-            <article className="metric-card insight-card"><div className="metric-top"><span className="metric-icon dark"><WandSparkles size={18} /></span><span className="insight-pill">INSIGHT</span></div><p className="insight-copy">Tus posts con historias personales generan <strong>2,4× más comentarios.</strong></p></article>
+            <article className="metric-card"><div className="metric-top"><span className="metric-icon purple"><Lightbulb size={18} /></span><span className="trend positive">Perfil separado</span></div><strong>{content.filter((item) => item.status === 'Idea').length}</strong><p>Ideas por desarrollar</p></article>
+            <article className="metric-card"><div className="metric-top"><span className="metric-icon blue"><BriefcaseBusiness size={18} /></span><span className="trend">Por semana</span></div><strong>{activeProfile.linkedinFrequency || '—'}</strong><p>Publicaciones en LinkedIn</p></article>
+            <article className="metric-card"><div className="metric-top"><span className="metric-icon amber"><AtSign size={18} /></span><span className="trend">Por semana</span></div><strong>{activeProfile.xFrequency || '—'}</strong><p>Publicaciones en X</p></article>
+            <article className="metric-card insight-card"><div className="metric-top"><span className="metric-icon dark"><WandSparkles size={18} /></span><span className="insight-pill">VOZ</span></div><p className="insight-copy">{activeProfile.voiceSummary}</p></article>
           </div>
 
           <div className="main-grid">
@@ -184,11 +258,11 @@ export default function Home() {
 
             <aside className="panel next-panel">
               <div className="panel-heading"><div><h2>Próximo a publicar</h2><p>Hoy · 18:30</p></div><button className="row-more" aria-label="Más opciones"><MoreHorizontal size={18} /></button></div>
-              <div className="network-label"><span className="platform-icon linkedin"><BriefcaseBusiness size={16} /></span><span><strong>LinkedIn</strong><small>Perfil personal</small></span></div>
-              <h3>La IA no va a reemplazar tu trabajo.</h3>
-              <p className="preview-copy">Pero alguien que sepa convertirla en un sistema probablemente cambie la forma en que compites...</p>
-              <div className="preview-tags"><span>Liderazgo</span><span>IA aplicada</span></div>
-              <Button variant="outline" className="review-button">Revisar publicación <ArrowRight size={15} /></Button>
+              <div className="network-label"><span className="platform-icon linkedin"><BriefcaseBusiness size={16} /></span><span><strong>LinkedIn</strong><small>{activeProfile.name} · {activeProfile.kind}</small></span></div>
+              <h3>{activeProfile.id === 'hype' ? 'Los creadores tienen la atención. Hype construye lo que sigue.' : 'Por qué decidí construir desde Buenos Aires.'}</h3>
+              <p className="preview-copy">Esta publicación está separada dentro del perfil {activeProfile.name} y requiere aprobación antes de salir.</p>
+              <div className="preview-tags"><span>{activeProfile.id === 'hype' ? 'Company building' : 'Founder journey'}</span><span>Startups</span></div>
+              <Button variant="outline" className="review-button">Revisar antes de publicar <ArrowRight size={15} /></Button>
             </aside>
           </div>
 
@@ -198,6 +272,23 @@ export default function Home() {
           </section>
         </div>
       </section>
+
+      <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
+        <DialogContent className="profile-settings-dialog">
+          <DialogHeader>
+            <DialogTitle>Voz y referencias · {settingsDraft.name}</DialogTitle>
+            <DialogDescription>Esta configuración se usa solamente dentro de este perfil editorial.</DialogDescription>
+          </DialogHeader>
+          <div className="settings-grid">
+            <div className="settings-field"><Label htmlFor="audience">Audiencia</Label><Input id="audience" value={settingsDraft.audience} onChange={(event) => setSettingsDraft({ ...settingsDraft, audience: event.target.value })} /></div>
+            <div className="settings-field"><Label htmlFor="goals">Objetivos</Label><Input id="goals" value={settingsDraft.goals} onChange={(event) => setSettingsDraft({ ...settingsDraft, goals: event.target.value })} /></div>
+            <div className="settings-field"><Label htmlFor="voice">Voz y tono</Label><Textarea id="voice" className="min-h-28 resize-none" value={settingsDraft.voiceSummary} onChange={(event) => setSettingsDraft({ ...settingsDraft, voiceSummary: event.target.value })} /></div>
+            <div className="settings-field"><Label htmlFor="references">Cuentas de referencia</Label><Textarea id="references" className="min-h-24 resize-none" placeholder="Una URL o @usuario por línea" value={settingsDraft.referenceAccounts} onChange={(event) => setSettingsDraft({ ...settingsDraft, referenceAccounts: event.target.value })} /></div>
+            <div className="approval-note"><Check size={16} /><span><strong>Aprobación obligatoria</strong><small>Nada se publicará sin que lo revises.</small></span></div>
+          </div>
+          <DialogFooter><Button variant="outline" onClick={() => setSettingsOpen(false)}>Cancelar</Button><Button onClick={saveProfileSettings} disabled={settingsSaving}>{settingsSaving ? 'Guardando...' : 'Guardar configuración'}</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
     </main>
   );
 }
